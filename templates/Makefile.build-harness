@@ -5,10 +5,10 @@
 
 export SHELL = /bin/bash
 export BUILD_HARNESS_PATH ?= $(shell until [ -d "$(BUILD_HARNESS_PROJECT)" ] || [ "`pwd`" == '/' ]; do cd ..; done; pwd)/$(BUILD_HARNESS_PROJECT)
-export BUILD_HARNESS_ORG ?= cloudposse
+export BUILD_HARNESS_ORG ?= opsbot
 export BUILD_HARNESS_PROJECT ?= build-harness
 export BUILD_HARNESS_DOCKER_IMAGE ?= $(BUILD_HARNESS_ORG)/$(BUILD_HARNESS_PROJECT)
-export BUILD_HARNESS_BRANCH ?= master
+export BUILD_HARNESS_BRANCH ?= main
 # It is kind of expensive to figure out the Docker SHA tag, so we just define the command here, and only call it when needed
 export BUILD_HARNESS_DOCKER_SHA_TAG_CMD := git -C "$(BUILD_HARNESS_PATH)" log -n 1 --format=sha-%h 2>/dev/null || echo latest
 
@@ -17,16 +17,19 @@ export BUILD_HARNESS_DOCKER_SHA_TAG_CMD := git -C "$(BUILD_HARNESS_PATH)" log -n
 .PHONY : init
 ## Init build-harness
 init::
-	@curl --retry 5 --fail --silent --retry-delay 1 https://raw.githubusercontent.com/$(BUILD_HARNESS_ORG)/$(BUILD_HARNESS_PROJECT)/$(BUILD_HARNESS_BRANCH)/bin/install.sh | \
+	@curl -fsSL --retry 5 --retry-delay 1 https://raw.githubusercontent.com/$(BUILD_HARNESS_ORG)/$(BUILD_HARNESS_PROJECT)/$(BUILD_HARNESS_BRANCH)/bin/install.sh | \
 		bash -s "$(BUILD_HARNESS_ORG)" "$(BUILD_HARNESS_PROJECT)" "$(BUILD_HARNESS_BRANCH)"
 
-.PHONY : clean
+.PHONY : clean-build-harness
 ## Clean build-harness
-clean::
-	@[ "$(BUILD_HARNESS_PATH)" == '/' ] || \
-	[ "$(BUILD_HARNESS_PATH)" == '.' ] || \
-	[ "$(BUILD_HARNESS_PATH)" == '/$(BUILD_HARNESS_PROJECT)' ] || \
-	echo rm -rf $(BUILD_HARNESS_PATH)
+clean-build-harness::
+	@[ "$(BUILD_HARNESS_PATH)" == '/' ] || [ "$(BUILD_HARNESS_PATH)" == '.' ] || \
+	   echo rm -rf $(BUILD_HARNESS_PATH) \
+	   echo rm -rf .build-harness
+
+.PHONY : refresh-build-harness
+## reload build harness from upstream
+refresh-build-harness:: clean-build-harness init
 
 .PHONY: build-harness/shell builder build-harness/shell/pull builder/pull
 
@@ -70,7 +73,7 @@ pr/auto-format tf14-upgrade : ENTRYPOINT := /usr/bin/make
 
 pr/auto-format pr/auto-format/host: ARGS := terraform/fmt readme
 pr/auto-format: build-harness/runner
-pr/auto-format/host: 
+pr/auto-format/host:
 	$(MAKE) $(ARGS)
 
 tf14-upgrade: export TERRAFORM_FORCE_README := true
